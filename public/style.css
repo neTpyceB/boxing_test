@@ -1,0 +1,23 @@
+* {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+}
+body { font: 13px Helvetica, Arial; }
+#debug {
+    position: fixed;
+    left: 0;
+    top: 820px;
+    background: green;
+    color: red;
+  }
+.box_ring-container {
+    background-image: url("source/ring.png");
+    background-position: center;
+    padding: 3px;
+    position: fixed;
+    left: 0;
+    width: 1440px;
+    top: 0;
+    height: 810px;
+}
