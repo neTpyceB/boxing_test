@@ -12,7 +12,7 @@
     <script>
       $(function () {
         var socket = io();
-        socket.on('doBoxingHit', function(_params) {
+        socket.on('sendNextCommand', function(_params) {
           $('#debug').html(_params);
         });
       });
