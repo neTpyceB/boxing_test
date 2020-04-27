@@ -13,8 +13,9 @@
       $(function () {
         var socket = io();
         socket.on('playNextAnimation', function(_params) {
-          $('#debug').html(_params);
-          // TODO play animation _params['animation'] frames using Pixi
+          //$('#debug').html('Period: ' + _params);
+          console.log(_params);
+          // TODO play animation _params['moveAnimationFrames'] frames using Pixi
         });
       });
     </script>

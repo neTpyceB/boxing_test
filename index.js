@@ -14,9 +14,13 @@ app.get('/', (req, res) => {
 
 // Container for all our variables
 let boxingMatchRuleBook = {
-    intervalForHitting: null,
+    PERIOD_FIGHT: 'fight',
+    PERIOD_IDLE: 'idle',
+    matchTimeFromStart: -5, // Seconds from the beginning of the match, we give 5 seconds to "prepare" boxers before the first period
+    intervalForAddintFightTime: null,
     allowedBoxerMoves: {},
     roundSettings: {
+        pauseBeforeMatch: 5, // Seconds
         roundTimeout: 180, // Seconds
         totalRoundInOneFight: 4,
         idlePauseBetweenRounds: 10, // Seconds
@@ -71,45 +75,113 @@ function generateListOfAvailableMoves() {
 }
 
 // Choose the next random hit
-function chooseNextRandomHit() {
-    // TODO get the random red/blue and random L_.../R_...
+function chooseNextRandomHitFrames() {
+    // TODO random choose who will hit and choose the block possibility
+    const willOpponentBlock = decideWillOpponentBlock();
+
+    // TODO set animation frames as random hit + block or stand still
+    // TODO create an empty frame for "standing" without block, maybe with blood :D
+    return {
+        'blue': ['fight'],
+        'red': ['fight']
+    };
+}
+
+// Choose the next random hit
+function getIdleAnimationFrames() {
+    // TODO get the idle animations for both boxers
+    return {
+        'blue': ['idle'],
+        'red': ['idle']
+    };
 }
 
 // Decide whether the next hit will be blocked by the opponent
-// Change of blocking the first hit in a sequence is pretty high, getting lower with every next hit. No one can block all hits forever.
+// Change of blocking the first hit in a sequence is pretty high, getting lower with every next hit. No one can block all hits forever. This is tru only if the same boxer has blocks in a sequence, should be zero change if the previous boxer is not the same as the next boxer
 function decideWillOpponentBlock() {
-    // TODO random block the hit,
+    // TODO random block the hit
+}
+
+function getCurrentMatchPeriod() {
+    // If current time is in the middle of any fight period - boxers should show some moves
+    let iPeriod = 0;
+    let periodTimeStart;
+    let periodTimeEnd;
+    let pauseShift;
+
+    for (; iPeriod < boxingMatchRuleBook.roundSettings.totalRoundInOneFight; ++iPeriod) {
+        // Calculate the start and the end for each period
+        periodTimeStart = iPeriod * boxingMatchRuleBook.roundSettings.roundTimeout;
+        periodTimeEnd = (iPeriod + 1) * boxingMatchRuleBook.roundSettings.roundTimeout;
+
+        // Add the idle period between rounds
+        pauseShift = iPeriod * boxingMatchRuleBook.roundSettings.idlePauseBetweenRounds;
+
+        // Add idle time to our times between
+        periodTimeStart += pauseShift;
+        periodTimeEnd += pauseShift;
+
+        // Return the fight constant if it is a time to show some hits
+        if (boxingMatchRuleBook.matchTimeFromStart >= periodTimeStart && boxingMatchRuleBook.matchTimeFromStart <= periodTimeEnd) {
+            return boxingMatchRuleBook.PERIOD_FIGHT;
+        }
+    }
+
+    // In all other cases - boxers rest
+    return boxingMatchRuleBook.PERIOD_IDLE;
 }
 
 // Trigger the hit animation
-function playNextAnimation(_params) {
-    // TODO set idle animation for first 3 seconds before starting the match, show timer in frontend
-    // TODO send next animation to be played
-    // TODO if round is going - send hit command and possible block command
-    // TODO if pause between rounds - send idle command
-    // TODO if match is over - show the winner. Winner counted who hot most without blocked
+function playNextAnimation() {
+    // We decide do boxers fight now or rest
+    const currentMatchPeriod = getCurrentMatchPeriod();
+
+    let animationFrameToPlay;
+    let willOpponentBlock;
+
+    if (currentMatchPeriod === boxingMatchRuleBook.PERIOD_FIGHT) {
+        animationFrameToPlay = chooseNextRandomHitFrames();
+    } else {
+        animationFrameToPlay = getIdleAnimationFrames();
+    }
+
+    // TODO if match is over - show the winner with most points
     // TODO show results as a counter table in frontend, points for hitting without a block
     // TODO after preparing all that - go to Pixi and draw actual animation frames
 
-    console.log('Sending ' + _params);
-    io.emit('playNextAnimation', _params);
+    const sendToFrontend = {
+        'moveAnimationFrames': chooseNextRandomHitFrames, // Animations to play
+        'period': currentMatchPeriod, // Current period: start, fighting, idle, over
+        'points': { // Boxer points, +3 for not blocked hit, +1 for blocked.
+            'blue' : 0,
+            'red' : 0
+        },
+        'timeFromFightStart': boxingMatchRuleBook.matchTimeFromStart
+    };
+
+    console.log('Sending: ' + sendToFrontend);
+    io.emit('playNextAnimation', sendToFrontend);
 }
 
 function initTheMatch() {
     // TODO Send allowed moves to the frontend, so we can send only command names, it will save some traffic to all connected poolings
-    console.log(boxingMatchRuleBook.allowedBoxerMoves);
+    // TODO always send both boxers next moves to prevent odd situations like visual misbehaviour in case of JS or network errors
+    // console.log(boxingMatchRuleBook.allowedBoxerMoves);
 
-    // We do not use promises here, so we have to make sure we reset interval object because it is JS and we may have multiple interval objects living there on the server
+    // We do not use promises here, so we have to make sure we reset interval object to clear the match
     console.log('Watcher is connected, start the match over again');
-    clearInterval(boxingMatchRuleBook.intervalForHitting);
+    boxingMatchRuleBook.matchTimeFromStart = -5;
+
+    boxingMatchRuleBook.intervalForAddintFightTime = setInterval(function() {
+        boxingMatchRuleBook.matchTimeFromStart++
+    }, 1000);
 
     // Start the match, let's it rumble
     (function loop() {
         // Random time from 0.5 seconds to 3 seconds. Because our boxers are not robot and should hit with random delay
         let rand = Math.round(Math.random() * 2500) + 500;
-        console.log(rand);
         setTimeout(function() {
-            playNextAnimation('Next hit in ' + rand + ' ms.');
+            playNextAnimation();
             loop();
         }, rand);
     }());
@@ -121,8 +193,6 @@ io.on('connection', (socket) => {
     // Make sure we reset the interval object when the watcher disconnects, gives nothing to our watcher but keeps memory low for the server
     socket.on('disconnect', () => {
         console.log('Watcher is disconnected, stop the match');
-
-        clearInterval(boxingMatchRuleBook.intervalForHitting);
   });
 });
 
