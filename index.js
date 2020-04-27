@@ -36,16 +36,23 @@ function generateListOfAvailableMoves() {
             // Adding all possible moves
             let directoryPathForBoxer = __dirname + '/public/source/boxers_anim/' + boxer;
 
+            // Adding empty move bag
+            boxingMatchRuleBook.allowedBoxerMoves[boxer]['hits'] = {}
+
             fs.readdir(directoryPathForBoxer, function (err, moves) {
                 moves.forEach(function (oneMove) {
-                    // Adding empty move bag
-                    boxingMatchRuleBook.allowedBoxerMoves[boxer]['hits'] = {}
 
-                    // TODO scan for animationFrames
-                    let animationFrames = {}
-                    // TODO is oneMove with L_/R_ or own name
-                    let isAllowedHit = false;
+                    let animationFrames = [];
+                    // All folders with hits have _ in it, either L_ or R_
+                    let isAllowedHit = oneMove.indexOf('_') === 1;
                     let directoryPathForBoxerMoves = __dirname + '/public/source/boxers_anim/' + boxer + '/'+ oneMove;
+
+                    fs.readdir(directoryPathForBoxerMoves, function (err, moveFrames) {
+                        moveFrames.forEach(function (moveFrame) {
+                            // We believe all files are pngs here and we will collect full path from parts to make it easier in case we move smth and all are sorted due to 8 frames per hit only
+                            animationFrames.push(directoryPathForBoxerMoves + '/' + moveFrame + '.png');
+                        });
+                    });
 
                     if (isAllowedHit) {
                         // Add possible hit moves
@@ -75,8 +82,7 @@ function decideWillOpponentBlock() {
 }
 
 // Trigger the hit animation
-function sendNextCommand(_params) {
-    // TODO set random Interval, from 0.5 to 3 seconds
+function playNextAnimation(_params) {
     // TODO set idle animation for first 3 seconds before starting the match, show timer in frontend
     // TODO send next animation to be played
     // TODO if round is going - send hit command and possible block command
@@ -86,10 +92,11 @@ function sendNextCommand(_params) {
     // TODO after preparing all that - go to Pixi and draw actual animation frames
 
     console.log('Sending ' + _params);
-    io.emit('sendNextCommand', _params);
+    io.emit('playNextAnimation', _params);
 }
 
 function initTheMatch() {
+    // TODO Send allowed moves to the frontend, so we can send only command names, it will save some traffic to all connected poolings
     console.log(boxingMatchRuleBook.allowedBoxerMoves);
 
     // We do not use promises here, so we have to make sure we reset interval object because it is JS and we may have multiple interval objects living there on the server
@@ -97,9 +104,15 @@ function initTheMatch() {
     clearInterval(boxingMatchRuleBook.intervalForHitting);
 
     // Start the match, let's it rumble
-    boxingMatchRuleBook.intervalForHitting = setInterval(() => {
-        sendNextCommand('New hit ' + Date.now());
-    }, 1000);
+    (function loop() {
+        // Random time from 0.5 seconds to 3 seconds. Because our boxers are not robot and should hit with random delay
+        let rand = Math.round(Math.random() * 2500) + 500;
+        console.log(rand);
+        setTimeout(function() {
+            playNextAnimation('Next hit in ' + rand + ' ms.');
+            loop();
+        }, rand);
+    }());
 }
 
 io.on('connection', (socket) => {
