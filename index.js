@@ -57,8 +57,8 @@ function generateListOfAvailableMoves() {
 
                     fs.readdir(directoryPathForBoxerMoves, function (err, moveFrames) {
                         moveFrames.forEach(function (moveFrame) {
-                            // We believe all files are pngs here and we will collect full path from parts to make it easier in case we move smth and all are sorted due to 8 frames per hit only
-                            animationFrames.push(directoryPathForBoxerMoves + '/' + moveFrame);
+                            // We believe all files are pngs here and we will collect full path from parts to make it easier in case we move smth and all are sorted due to 8 frames per hit only - without the _dirname
+                            animationFrames.push('/public/source/boxers_anim/' + boxer + '/'+ oneMove + '/' + moveFrame);
                         });
                     });
 
@@ -162,7 +162,6 @@ function getMoveAnimationFrames(moves) {
     // To get the random hit a boxer will do next
     const randomProperty = function (obj) {
         const keys = Object.keys(obj);
-        console.log('keys: ' + keys);
         return obj[keys[ keys.length * Math.random() << 0]];
     };
 
@@ -232,7 +231,6 @@ function playNextAnimation() {
         'timeFromFightStart': boxingMatchRuleBook.matchTimeFromStart
     };
 
-    // console.log('Sending: ' + sendToFrontend);
     io.emit('playNextAnimation', sendToFrontend);
 }
 
