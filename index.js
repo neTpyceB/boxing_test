@@ -16,8 +16,12 @@ app.get('/', (req, res) => {
 let boxingMatchRuleBook = {
     PERIOD_FIGHT: 'fight',
     PERIOD_IDLE: 'idle',
+    BOXER_ONE: 'blue',
+    BOXER_TWO: 'red',
+    lastBoxerHit: '',
+    blockedInSequence: 0,
     matchTimeFromStart: -5, // Seconds from the beginning of the match, we give 5 seconds to "prepare" boxers before the first period
-    intervalForAddintFightTime: null,
+    intervalForAddingFightTime: null,
     allowedBoxerMoves: {},
     roundSettings: {
         pauseBeforeMatch: 5, // Seconds
@@ -75,31 +79,51 @@ function generateListOfAvailableMoves() {
 }
 
 // Choose the next random hit
-function chooseNextRandomHitFrames() {
-    // TODO random choose who will hit and choose the block possibility
-    const willOpponentBlock = decideWillOpponentBlock();
+function chooseNextRandomMoves() {
+    // Choose who will hit next
+    const whoWillHit = [boxingMatchRuleBook.BOXER_ONE, boxingMatchRuleBook.BOXER_TWO][Math.round(Math.random())]
 
-    // TODO set animation frames as random hit + block or stand still
-    // TODO create an empty frame for "standing" without block, maybe with blood :D
-    return {
-        'blue': ['fight'],
-        'red': ['fight']
-    };
+    // Will the boxer have the ability to block the hit
+    const willOpponentBlock = decideWillOpponentBlock(whoWillHit);
+
+    // Save it for the next hit
+    boxingMatchRuleBook.lastBoxerHit = whoWillHit;
+
+    let returningObject = {};
+    returningObject[whoWillHit] = 'hit'; // Hit animation
+    returningObject[whoWillHit === boxingMatchRuleBook.BOXER_ONE ? boxingMatchRuleBook.BOXER_TWO : boxingMatchRuleBook.BOXER_ONE] = willOpponentBlock ? 'block' : 'break'; // Block/blood animation - TODO use break frames for now, later on need to draw blood like after a good strong hit, to make it more interesting to watch through all rounds
+
+    return returningObject;
 }
 
 // Choose the next random hit
 function getIdleAnimationFrames() {
-    // TODO get the idle animations for both boxers
-    return {
-        'blue': ['idle'],
-        'red': ['idle']
-    };
+    let returningObject = {};
+    returningObject[boxingMatchRuleBook.BOXER_ONE] = 'idle';
+    returningObject[boxingMatchRuleBook.BOXER_TWO] = 'idle';
+
+    return returningObject;
 }
 
 // Decide whether the next hit will be blocked by the opponent
-// Change of blocking the first hit in a sequence is pretty high, getting lower with every next hit. No one can block all hits forever. This is tru only if the same boxer has blocks in a sequence, should be zero change if the previous boxer is not the same as the next boxer
-function decideWillOpponentBlock() {
-    // TODO random block the hit
+// Change of blocking the first hit in a sequence is pretty high, getting lower with every next hit. No one can block all hits forever. This is true only if the same boxer has blocks in a sequence
+function decideWillOpponentBlock(whoWillHit) {
+    let chanceToBlock = 1;
+
+    // For every blocked hit previously - we decrease the change for the next successful block, only if the same opponent hits
+    if (whoWillHit === boxingMatchRuleBook.lastBoxerHit) {
+        // Increase blocked hits in a row
+        boxingMatchRuleBook.blockedInSequence++;
+
+        // Decrease by 25% change for every next block
+        chanceToBlock -= (boxingMatchRuleBook.blockedInSequence * 0.25);
+    } else {
+        // Reset the sequence for the next boxer
+        boxingMatchRuleBook.blockedInSequence = 0;
+    }
+
+    // Approx.
+    return Math.random() < chanceToBlock;
 }
 
 function getCurrentMatchPeriod() {
@@ -131,26 +155,32 @@ function getCurrentMatchPeriod() {
     return boxingMatchRuleBook.PERIOD_IDLE;
 }
 
+function getMoveAnimationFrames(moves) {
+    // TODO get actual move frames
+    console.log(moves);
+}
+
 // Trigger the hit animation
 function playNextAnimation() {
     // We decide do boxers fight now or rest
     const currentMatchPeriod = getCurrentMatchPeriod();
 
-    let animationFrameToPlay;
-    let willOpponentBlock;
+    let nextMoves;
 
     if (currentMatchPeriod === boxingMatchRuleBook.PERIOD_FIGHT) {
-        animationFrameToPlay = chooseNextRandomHitFrames();
+        nextMoves = chooseNextRandomMoves();
     } else {
-        animationFrameToPlay = getIdleAnimationFrames();
+        nextMoves = getIdleAnimationFrames();
     }
+
+    const nextMovesAnimationFrames = getMoveAnimationFrames(nextMoves);
 
     // TODO if match is over - show the winner with most points
     // TODO show results as a counter table in frontend, points for hitting without a block
     // TODO after preparing all that - go to Pixi and draw actual animation frames
 
     const sendToFrontend = {
-        'moveAnimationFrames': chooseNextRandomHitFrames, // Animations to play
+        'moveAnimationFrames': nextMoves, // Animations to play
         'period': currentMatchPeriod, // Current period: start, fighting, idle, over
         'points': { // Boxer points, +3 for not blocked hit, +1 for blocked.
             'blue' : 0,
@@ -172,7 +202,7 @@ function initTheMatch() {
     console.log('Watcher is connected, start the match over again');
     boxingMatchRuleBook.matchTimeFromStart = -5;
 
-    boxingMatchRuleBook.intervalForAddintFightTime = setInterval(function() {
+    boxingMatchRuleBook.intervalForAddingFightTime = setInterval(function() {
         boxingMatchRuleBook.matchTimeFromStart++
     }, 1000);
 
