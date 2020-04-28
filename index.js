@@ -58,7 +58,7 @@ function generateListOfAvailableMoves() {
                     fs.readdir(directoryPathForBoxerMoves, function (err, moveFrames) {
                         moveFrames.forEach(function (moveFrame) {
                             // We believe all files are pngs here and we will collect full path from parts to make it easier in case we move smth and all are sorted due to 8 frames per hit only
-                            animationFrames.push(directoryPathForBoxerMoves + '/' + moveFrame + '.png');
+                            animationFrames.push(directoryPathForBoxerMoves + '/' + moveFrame);
                         });
                     });
 
@@ -90,14 +90,14 @@ function chooseNextRandomMoves() {
     boxingMatchRuleBook.lastBoxerHit = whoWillHit;
 
     let returningObject = {};
-    returningObject[whoWillHit] = 'hit'; // Hit animation
+    returningObject[whoWillHit] = 'hits'; // Hit animation
     returningObject[whoWillHit === boxingMatchRuleBook.BOXER_ONE ? boxingMatchRuleBook.BOXER_TWO : boxingMatchRuleBook.BOXER_ONE] = willOpponentBlock ? 'block' : 'break'; // Block/blood animation - TODO use break frames for now, later on need to draw blood like after a good strong hit, to make it more interesting to watch through all rounds
 
     return returningObject;
 }
 
 // Choose the next random hit
-function getIdleAnimationFrames() {
+function getIdleMove() {
     let returningObject = {};
     returningObject[boxingMatchRuleBook.BOXER_ONE] = 'idle';
     returningObject[boxingMatchRuleBook.BOXER_TWO] = 'idle';
@@ -156,8 +156,50 @@ function getCurrentMatchPeriod() {
 }
 
 function getMoveAnimationFrames(moves) {
-    // TODO get actual move frames
-    console.log(moves);
+    let boxerOneFrames;
+    let boxerTwoFrames;
+
+    // To get the random hit a boxer will do next
+    const randomProperty = function (obj) {
+        const keys = Object.keys(obj);
+        console.log('keys: ' + keys);
+        return obj[keys[ keys.length * Math.random() << 0]];
+    };
+
+    // We could use a for;in loop here for all boxer in moves, but we have only two, let's use usual copy-paste
+
+    // Set the actual frames for the boxer 1
+    switch (moves[boxingMatchRuleBook.BOXER_ONE]) {
+        case 'hits': {
+            boxerOneFrames = randomProperty(boxingMatchRuleBook.allowedBoxerMoves[boxingMatchRuleBook.BOXER_ONE]['hits']);
+
+            break;
+        }
+        default: {
+            // Get whatever is in the selected object by name
+            boxerOneFrames = boxingMatchRuleBook.allowedBoxerMoves[boxingMatchRuleBook.BOXER_ONE][moves[boxingMatchRuleBook.BOXER_ONE]];
+        }
+    }
+
+    // And for the boer 2
+    switch (moves[boxingMatchRuleBook.BOXER_TWO]) {
+        case 'hits': {
+            boxerTwoFrames = randomProperty(boxingMatchRuleBook.allowedBoxerMoves[boxingMatchRuleBook.BOXER_TWO]['hits']);
+
+            break;
+        }
+        default: {
+            // Get whatever is in the selected object by name
+            boxerTwoFrames = boxingMatchRuleBook.allowedBoxerMoves[boxingMatchRuleBook.BOXER_TWO][moves[boxingMatchRuleBook.BOXER_TWO]];
+        }
+    }
+
+
+    let returningObject = {};
+    returningObject[boxingMatchRuleBook.BOXER_ONE] = boxerOneFrames;
+    returningObject[boxingMatchRuleBook.BOXER_TWO] = boxerTwoFrames;
+
+    return returningObject;
 }
 
 // Trigger the hit animation
@@ -170,7 +212,8 @@ function playNextAnimation() {
     if (currentMatchPeriod === boxingMatchRuleBook.PERIOD_FIGHT) {
         nextMoves = chooseNextRandomMoves();
     } else {
-        nextMoves = getIdleAnimationFrames();
+        // Separately we set only an idle move, to make it easy to choose a hit moves
+        nextMoves = getIdleMove();
     }
 
     const nextMovesAnimationFrames = getMoveAnimationFrames(nextMoves);
@@ -180,7 +223,7 @@ function playNextAnimation() {
     // TODO after preparing all that - go to Pixi and draw actual animation frames
 
     const sendToFrontend = {
-        'moveAnimationFrames': nextMoves, // Animations to play
+        'moveAnimationFrames': nextMovesAnimationFrames, // Animations to play
         'period': currentMatchPeriod, // Current period: start, fighting, idle, over
         'points': { // Boxer points, +3 for not blocked hit, +1 for blocked.
             'blue' : 0,
@@ -189,15 +232,12 @@ function playNextAnimation() {
         'timeFromFightStart': boxingMatchRuleBook.matchTimeFromStart
     };
 
-    console.log('Sending: ' + sendToFrontend);
+    // console.log('Sending: ' + sendToFrontend);
     io.emit('playNextAnimation', sendToFrontend);
 }
 
+// We could send all mass of all moves and combination to frontend and send periodically only the command to play... But we do not care for it in our example, so all calculation are done in the backend and we will send a full animation frames to play. This is also good if something changes while the match goes and we do not to refresh the frontend.
 function initTheMatch() {
-    // TODO Send allowed moves to the frontend, so we can send only command names, it will save some traffic to all connected poolings
-    // TODO always send both boxers next moves to prevent odd situations like visual misbehaviour in case of JS or network errors
-    // console.log(boxingMatchRuleBook.allowedBoxerMoves);
-
     // We do not use promises here, so we have to make sure we reset interval object to clear the match
     console.log('Watcher is connected, start the match over again');
     boxingMatchRuleBook.matchTimeFromStart = -5;
